@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from app.schemas.certificate import CertificateResult, CertificateStatus
 from app.schemas.supplier import SupplierInfo, SupplierRuleResult
@@ -7,7 +7,7 @@ from app.schemas.document import AdditionalDocumentResult, DocumentStatus
 class ProcessMetadata(BaseModel):
     id: str
     filename: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     total_pages: int
     file_size_bytes: int
     scanned_pages_count: int = 0
@@ -33,27 +33,7 @@ class ProcessAnalysisResponse(BaseModel):
     warnings: list[str] = []
     total_pending: int = 0
 
-class ProcessSummary(BaseModel):
-    id: str
-    filename: str
-    created_at: datetime
-    cnpj: str | None = None
-    supplier_name: str | None = None
-    total_pending: int
-    overall_status: str
-    total_pages: int
-
-class UpdateSupplierRequest(BaseModel):
-    cnpj: str
-    corporate_name: str | None = None
-
-class UpdateCertificateOverrideRequest(BaseModel):
-    cert_type: str
-    status: CertificateStatus
-    found: bool
-    manual_notes: str | None = None
-
-class UpdateDocOverrideRequest(BaseModel):
-    doc_type: str
-    status: DocumentStatus
-    found: bool
+class RecalculateRequest(BaseModel):
+    analysis: ProcessAnalysisResponse
+    new_supplier_cnpj: str | None = None
+    new_supplier_name: str | None = None

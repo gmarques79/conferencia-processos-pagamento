@@ -1,10 +1,7 @@
-import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from sqlalchemy.orm import Session
 from app.config.supplier_rules import get_supplier_rule
-from app.models.process_db import ProcessRecord
 from app.schemas.supplier import SupplierInfo, SupplierRuleResult
 from app.schemas.process import (
     ProcessAnalysisResponse,
@@ -29,7 +26,6 @@ class ProcessAnalyzer:
         pdf_path: Path | str,
         original_filename: str,
         file_size: int,
-        db: Session | None = None,
         process_id: str | None = None,
         manual_cnpj: str | None = None,
         manual_supplier_name: str | None = None,
@@ -140,7 +136,7 @@ class ProcessAnalyzer:
             ocr_available=extracted.ocr_available,
         )
 
-        response = ProcessAnalysisResponse(
+        return ProcessAnalysisResponse(
             id=pid,
             metadata=metadata,
             supplier=supplier_info,
@@ -151,24 +147,5 @@ class ProcessAnalyzer:
             warnings=all_warnings,
             total_pending=total_pending,
         )
-
-        # 8. Persist to Database if session provided
-        if db:
-            record = ProcessRecord(
-                id=pid,
-                filename=original_filename,
-                created_at=metadata.created_at,
-                total_pages=total_pages,
-                cnpj=confirmed_cnpj,
-                supplier_name=supplier_rule_res.display_name,
-                total_pending=total_pending,
-                overall_status=final_instructions.overall_status,
-                analysis_json=json.dumps(response.model_dump(mode="json")),
-            )
-            # Merge or add
-            db.merge(record)
-            db.commit()
-
-        return response
 
 process_analyzer = ProcessAnalyzer()

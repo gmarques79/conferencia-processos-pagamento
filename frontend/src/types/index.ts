@@ -114,14 +114,3 @@ export interface ProcessAnalysisResponse {
   warnings: string[];
   total_pending: number;
 }
-
-export interface ProcessSummary {
-  id: string;
-  filename: string;
-  created_at: string;
-  cnpj: string | null;
-  supplier_name: string | null;
-  total_pending: number;
-  overall_status: string;
-  total_pages: number;
-}

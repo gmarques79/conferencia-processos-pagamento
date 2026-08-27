@@ -1,4 +1,5 @@
 import os
+import tempfile
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -7,21 +8,23 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     API_V1_STR: str = "/api"
     
-    # Storage & DB
-    DATABASE_URL: str = "sqlite:///./processos.db"
+    # Server port (Railway injects PORT)
+    PORT: int = int(os.environ.get("PORT", 8000))
+    HOST: str = "0.0.0.0"
     
     # Upload limits & rules
     MAX_UPLOAD_SIZE_BYTES: int = 50 * 1024 * 1024  # 50 MB
     ALLOWED_CONTENT_TYPES: list[str] = ["application/pdf"]
     
     # OCR Settings
-    SCANNED_PAGE_CHAR_THRESHOLD: int = 50  # pages with fewer chars trigger OCR / warning
+    SCANNED_PAGE_CHAR_THRESHOLD: int = 50  # pages with fewer chars trigger OCR
     TESSERACT_LANG: str = "por+eng"
-    TESSERACT_PATH: str | None = None  # Auto-detected if in PATH or common Windows paths
+    TESSERACT_PATH: str | None = None
     
     # Base directories
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
-    TEMP_DIR: Path = BASE_DIR / "temp"
+    TEMP_DIR: Path = Path(tempfile.gettempdir()) / "conferencia_processos_tmp"
+    STATIC_DIR: Path = BASE_DIR / "frontend_dist"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

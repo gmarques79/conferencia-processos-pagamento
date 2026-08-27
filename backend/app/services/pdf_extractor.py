@@ -1,8 +1,11 @@
 from dataclasses import dataclass, field
+import logging
 from pathlib import Path
-import fitz
+import pymupdf as fitz
 from app.config.settings import settings
 from app.services.ocr_service import ocr_service
+
+logger = logging.getLogger("pdf_extractor")
 
 @dataclass
 class ExtractedPdfData:
@@ -20,7 +23,7 @@ class PdfTextExtractor:
     def extract(self, pdf_path: str | Path) -> ExtractedPdfData:
         """
         Extracts text from each page of a PDF file using PyMuPDF.
-        If pages have minimal text, attempts OCR if available, or records warning.
+        If pages have minimal text, attempts OCR on those specific pages if available.
         """
         pdf_path_obj = Path(pdf_path)
         if not pdf_path_obj.exists():
@@ -34,7 +37,7 @@ class PdfTextExtractor:
         total_pages = len(doc)
         pages_text: list[str] = []
         scanned_pages: list[int] = []
-        ocr_used = False
+        ocr_pages_count = 0
         warnings: list[str] = []
 
         for page_idx in range(total_pages):
@@ -46,19 +49,26 @@ class PdfTextExtractor:
             clean_text = native_text.strip()
 
             if len(clean_text) < self.char_threshold:
-                # Potential scanned page
+                # Scanned or low-text page
                 scanned_pages.append(page_num)
                 if ocr_service.is_available:
                     ocr_text = ocr_service.extract_text_from_page_image(page)
                     if len(ocr_text.strip()) > len(clean_text):
                         pages_text.append(ocr_text)
-                        ocr_used = True
+                        ocr_pages_count += 1
                         continue
                 pages_text.append(clean_text)
             else:
                 pages_text.append(clean_text)
 
         doc.close()
+
+        searchable_pages_count = total_pages - len(scanned_pages)
+        logger.info(
+            f"PDF processado: total de {total_pages} página(s). "
+            f"{searchable_pages_count} com texto pesquisável, {len(scanned_pages)} páginas com pouco texto "
+            f"({ocr_pages_count} processadas com OCR)."
+        )
 
         if scanned_pages and not ocr_service.is_available:
             warnings.append(
@@ -70,7 +80,7 @@ class PdfTextExtractor:
             pages_text=pages_text,
             total_pages=total_pages,
             scanned_pages=scanned_pages,
-            is_ocr_used=ocr_used,
+            is_ocr_used=ocr_pages_count > 0,
             ocr_available=ocr_service.is_available,
             warnings=warnings,
         )

@@ -5,10 +5,7 @@ from app.schemas.process import (
     ProcessMetadata,
     FinalInstructions,
     ProcessAnalysisResponse,
-    ProcessSummary,
-    UpdateSupplierRequest,
-    UpdateCertificateOverrideRequest,
-    UpdateDocOverrideRequest,
+    RecalculateRequest,
 )
 
 __all__ = [
@@ -23,8 +20,5 @@ __all__ = [
     "ProcessMetadata",
     "FinalInstructions",
     "ProcessAnalysisResponse",
-    "ProcessSummary",
-    "UpdateSupplierRequest",
-    "UpdateCertificateOverrideRequest",
-    "UpdateDocOverrideRequest",
+    "RecalculateRequest",
 ]

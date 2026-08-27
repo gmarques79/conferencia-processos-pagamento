@@ -1,0 +1,42 @@
+.git
+.github
+.gitignore
+.dockerignore
+README.md
+
+# Python local artifacts
+backend/.venv
+backend/venv
+.venv
+venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.coverage
+**/htmlcov
+
+# Frontend local build & dependencies
+frontend/node_modules
+node_modules
+frontend/dist
+dist
+
+# Temporary files & local databases
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+**/temp
+**/temp_uploads
+**/*.pdf
+**/*.tmp
+**/*.log
+
+# Environment variables
+.env
+.env.*
+
+# Local scripts
+start-backend.ps1
+start-frontend.ps1

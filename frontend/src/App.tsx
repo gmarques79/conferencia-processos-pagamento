@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Header } from './components/Header';
 import { FileUpload } from './components/FileUpload';
 import { SupplierCard } from './components/SupplierCard';
@@ -6,21 +6,14 @@ import { CertificateCard } from './components/CertificateCard';
 import { AdditionalDocsCard } from './components/AdditionalDocsCard';
 import { InstructionsSection } from './components/InstructionsSection';
 import { WarningsBanner } from './components/WarningsBanner';
-import { HistoryView } from './components/HistoryView';
 import { 
   ProcessAnalysisResponse, 
-  ProcessSummary, 
   CertificateStatus, 
   DocumentStatus 
 } from './types';
 import { 
   analyzeProcess, 
-  listProcesses, 
-  getProcess, 
-  updateProcessSupplier, 
-  overrideCertificate, 
-  overrideDocument, 
-  deleteProcess 
+  recalculateAnalysis, 
 } from './services/api';
 import { ArrowLeft } from 'lucide-react';
 
@@ -29,25 +22,6 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [showHistory, setShowHistory] = useState<boolean>(false);
-  const [historyItems, setHistoryItems] = useState<ProcessSummary[]>([]);
-  const [historyLoading, setHistoryLoading] = useState<boolean>(false);
-
-  const fetchHistory = async () => {
-    try {
-      setHistoryLoading(true);
-      const items = await listProcesses();
-      setHistoryItems(items);
-    } catch {
-      // ignore
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchHistory();
-  }, []);
 
   const handleFileUpload = async (file: File) => {
     setIsLoading(true);
@@ -55,8 +29,6 @@ export const App: React.FC = () => {
     try {
       const response = await analyzeProcess(file);
       setCurrentResult(response);
-      setShowHistory(false);
-      fetchHistory();
     } catch (err: any) {
       setError(err.message || 'Erro ao processar o arquivo PDF.');
     } finally {
@@ -68,9 +40,8 @@ export const App: React.FC = () => {
     if (!currentResult) return;
     setIsUpdating(true);
     try {
-      const updated = await updateProcessSupplier(currentResult.id, cnpj, name);
+      const updated = await recalculateAnalysis(currentResult, cnpj, name);
       setCurrentResult(updated);
-      fetchHistory();
     } catch (err: any) {
       throw err;
     } finally {
@@ -87,15 +58,33 @@ export const App: React.FC = () => {
     if (!currentResult) return;
     setIsUpdating(true);
     try {
-      const updated = await overrideCertificate(
-        currentResult.id,
-        certType,
-        status,
-        found,
-        notes
-      );
-      setCurrentResult(updated);
-      fetchHistory();
+      // Clone current result and update cert
+      const updatedCerts = currentResult.certificates.map((c) => {
+        if (c.type === certType) {
+          let msg = c.message;
+          if (status === 'OK') msg = 'Marcada manualmente como regular pelo usuário.';
+          if (status === 'AUSENTE') msg = 'Marcada manualmente como ausente pelo usuário.';
+          if (status === 'REVISAR_MANUALMENTE') msg = 'Marcada manualmente para revisão pelo usuário.';
+          return {
+            ...c,
+            status,
+            found,
+            is_manually_overridden: true,
+            manual_notes: notes || null,
+            message: msg,
+          };
+        }
+        return c;
+      });
+
+      const updatedAnalysis: ProcessAnalysisResponse = {
+        ...currentResult,
+        certificates: updatedCerts,
+      };
+
+      // Recalculate instructions statelessly
+      const recalculated = await recalculateAnalysis(updatedAnalysis);
+      setCurrentResult(recalculated);
     } catch (err: any) {
       alert(err.message || 'Erro ao atualizar certidão.');
     } finally {
@@ -111,14 +100,29 @@ export const App: React.FC = () => {
     if (!currentResult) return;
     setIsUpdating(true);
     try {
-      const updated = await overrideDocument(
-        currentResult.id,
-        docType,
-        status,
-        found
-      );
-      setCurrentResult(updated);
-      fetchHistory();
+      const updatedDocs = currentResult.additional_documents.map((d) => {
+        if (d.type === docType) {
+          let msg = d.message;
+          if (status === 'OK') msg = 'Marcado manualmente como presente pelo usuário.';
+          if (status === 'AUSENTE') msg = 'Marcado manualmente como ausente pelo usuário.';
+          return {
+            ...d,
+            status,
+            found,
+            is_manually_overridden: true,
+            message: msg,
+          };
+        }
+        return d;
+      });
+
+      const updatedAnalysis: ProcessAnalysisResponse = {
+        ...currentResult,
+        additional_documents: updatedDocs,
+      };
+
+      const recalculated = await recalculateAnalysis(updatedAnalysis);
+      setCurrentResult(recalculated);
     } catch (err: any) {
       alert(err.message || 'Erro ao atualizar documento.');
     } finally {
@@ -126,59 +130,17 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleSelectHistoryItem = async (id: string) => {
-    try {
-      setIsLoading(true);
-      const res = await getProcess(id);
-      setCurrentResult(res);
-      setShowHistory(false);
-    } catch (err: any) {
-      alert(err.message || 'Erro ao abrir processo.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDeleteHistoryItem = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir este processo do histórico?')) {
-      return;
-    }
-    try {
-      await deleteProcess(id);
-      if (currentResult?.id === id) {
-        setCurrentResult(null);
-      }
-      fetchHistory();
-    } catch (err: any) {
-      alert(err.message || 'Erro ao excluir.');
-    }
-  };
-
   const handleNewAnalysis = () => {
     setCurrentResult(null);
-    setShowHistory(false);
     setError(null);
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
-      <Header
-        onNewAnalysis={handleNewAnalysis}
-        onToggleHistory={() => setShowHistory(!showHistory)}
-        showHistory={showHistory}
-        historyCount={historyItems.length}
-      />
+      <Header onNewAnalysis={handleNewAnalysis} />
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {showHistory ? (
-          <HistoryView
-            items={historyItems}
-            onSelect={handleSelectHistoryItem}
-            onDelete={handleDeleteHistoryItem}
-            onClose={() => setShowHistory(false)}
-            isLoading={historyLoading}
-          />
-        ) : !currentResult ? (
+        {!currentResult ? (
           <FileUpload
             onFileSelect={handleFileUpload}
             isLoading={isLoading}
@@ -201,7 +163,7 @@ export const App: React.FC = () => {
                     {currentResult.metadata.filename}
                   </h2>
                   <p className="text-xs text-slate-500 font-medium">
-                    {currentResult.metadata.total_pages} páginas • Processado localmente
+                    {currentResult.metadata.total_pages} páginas • Processamento stateless
                   </p>
                 </div>
               </div>
@@ -279,7 +241,7 @@ export const App: React.FC = () => {
             Conferência de Processos de Pagamento — Ferramenta de Apoio Administrativo
           </p>
           <p className="text-slate-400 mt-1">
-            Execução 100% local e segura • Nenhum documento é transmitido para serviços externos
+            Aplicação Stateless • Nenhum dado é persistido ou enviado a serviços externos
           </p>
         </div>
       </footer>

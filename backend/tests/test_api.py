@@ -19,7 +19,15 @@ def test_upload_invalid_extension(client):
     assert response.status_code == 400
     assert "Apenas arquivos .pdf são aceitos" in response.json()["detail"]
 
-def test_full_process_analysis_and_persistence(client, make_pdf):
+def test_upload_invalid_magic_bytes(client):
+    # .pdf extension but content doesn't start with %PDF-
+    fake_content = b"THIS IS NOT A VALID PDF FILE"
+    files = {"file": ("fake.pdf", fake_content, "application/pdf")}
+    response = client.post("/api/processes/analyze", files=files)
+    assert response.status_code == 400
+    assert "não corresponde a um documento PDF válido" in response.json()["detail"]
+
+def test_stateless_process_analysis(client, make_pdf):
     # Create synthetic PDF for Prime Beneficios
     pdf_bytes = make_pdf([
         # Page 1: Cover with supplier info
@@ -84,71 +92,25 @@ def test_full_process_analysis_and_persistence(client, make_pdf):
     assert fgts["status"] == CertificateStatus.AUSENTE
     assert fgts["found"] is False
 
-    # Check history listing
-    list_resp = client.get("/api/processes")
-    assert list_resp.status_code == 200
-    items = list_resp.json()
-    assert len(items) >= 1
-    assert items[0]["id"] == data["id"]
-    assert items[0]["cnpj"] == "05340639000130"
-
-    # Check process retrieval by ID
-    get_resp = client.get(f"/api/processes/{data['id']}")
-    assert get_resp.status_code == 200
-    assert get_resp.json()["id"] == data["id"]
-
-def test_update_supplier_recalculates_rules(client, make_pdf):
+def test_stateless_recalculate_rules(client, make_pdf):
     # Initially analyzed as Prime Beneficios
     pdf_bytes = make_pdf(["Fornecedor: 05.340.639/0001-30"])
     files = {"file": ("teste.pdf", pdf_bytes, "application/pdf")}
     res = client.post("/api/processes/analyze", files=files)
-    proc_id = res.json()["id"]
+    initial_analysis = res.json()
 
-    # Now update supplier to Bamex Manutenções (28.008.410/0001-06)
-    update_res = client.post(
-        f"/api/processes/{proc_id}/supplier",
-        json={"cnpj": "28.008.410/0001-06", "corporate_name": "Bamex Manutenções"},
+    # Recalculate with Bamex Manutenções (28.008.410/0001-06)
+    recalc_res = client.post(
+        "/api/processes/recalculate",
+        json={
+            "analysis": initial_analysis,
+            "new_supplier_cnpj": "28.008.410/0001-06",
+            "new_supplier_name": "Bamex Manutenções",
+        },
     )
-    assert update_res.status_code == 200
-    updated_data = update_res.json()
+    assert recalc_res.status_code == 200
+    updated_data = recalc_res.json()
     assert updated_data["supplier"]["cnpj"] == "28008410000106"
     assert updated_data["supplier_rules"]["report_required"] is True
     assert updated_data["supplier_rules"]["report_name"] == "Manutenções"
     assert any("Finalizada (Somente)" in w for w in updated_data["supplier_rules"]["warnings"])
-
-def test_override_certificate_and_document(client, make_pdf):
-    pdf_bytes = make_pdf(["Processo simples"])
-    files = {"file": ("teste2.pdf", pdf_bytes, "application/pdf")}
-    res = client.post("/api/processes/analyze", files=files)
-    proc_id = res.json()["id"]
-
-    # Override FGTS as found / OK manually
-    override_cert = client.post(
-        f"/api/processes/{proc_id}/override-certificate",
-        json={
-            "cert_type": CertificateType.FGTS,
-            "status": CertificateStatus.OK,
-            "found": True,
-            "manual_notes": "Conferido no processo físico",
-        },
-    )
-    assert override_cert.status_code == 200
-    cert_data = override_cert.json()
-    fgts = next(c for c in cert_data["certificates"] if c["type"] == CertificateType.FGTS)
-    assert fgts["status"] == CertificateStatus.OK
-    assert fgts["is_manually_overridden"] is True
-
-    # Override Folha de Dados as OK manually
-    override_doc = client.post(
-        f"/api/processes/{proc_id}/override-document",
-        json={
-            "doc_type": "PAYMENT_DATA_SHEET",
-            "status": DocumentStatus.OK,
-            "found": True,
-        },
-    )
-    assert override_doc.status_code == 200
-    doc_data = override_doc.json()
-    pay = next(d for d in doc_data["additional_documents"] if d["type"] == "PAYMENT_DATA_SHEET")
-    assert pay["status"] == DocumentStatus.OK
-    assert pay["is_manually_overridden"] is True
