@@ -25,16 +25,6 @@ O sistema recebe o processo em PDF, extrai o texto página a página via **PyMuP
 
 ---
 
-## 🏢 Regras de Fornecedores Cadastrados
-
-| Fornecedor | CNPJ | Exige Relatório Específico? | Relatório Exigido | Instrução / Aviso |
-| :--- | :--- | :--- | :--- | :--- |
-| **Prime Benefícios** | `05.340.639/0001-30` (`05340639000130`) | **Sim** | Consumo Subunidade/Veículo | Acesse a aba *Relatórios*. |
-| **Bamex Manutenções** | `28.008.410/0001-06` (`28008410000106`) | **Sim** | Manutenções | Acesse *Módulo de manutenção > Ordens de Serviço > Relatórios*. **Aviso obrigatório:** *Antes de gerar o relatório, filtre o status por Finalizada (Somente).* |
-| **Demais Fornecedores** | Qualquer outro CNPJ | **Não** | Não aplicável | Não é necessário relatório adicional. |
-
----
-
 ## 🚀 Deploy no Railway (Passo a Passo)
 
 A aplicação foi configurada com um `Dockerfile` multi-stage na raiz do projeto, unificando o frontend React compilado, o backend FastAPI e o Tesseract OCR em um **único serviço web**.
